@@ -1,3 +1,4 @@
+#include <cassert>
 #include <cerrno>
 #include <cstdint>
 #include <cstdio>
@@ -10,9 +11,17 @@
 #include <unistd.h>
 
 
+const size_t MAX_MSG_LEN = 4096;
+
+
 static void die(const char *msg);
 static void msg(const char *msg);
 static void do_something(int connfd);
+
+static int32_t read_full(int fd, char *buf, size_t len);
+static int32_t write_all(int fd, const char *buf, size_t len);
+
+static int32_t one_request(int connfd);
 
 
 static void die(const char *msg) {
@@ -23,6 +32,77 @@ static void die(const char *msg) {
 
 static void msg(const char *msg) {
     (void)fprintf(stderr, "%s\n", msg);
+}
+
+
+static int32_t read_full(int fd, char *buf, size_t len) {
+    while (len > 0) {
+        ssize_t rv = read(fd, buf, len);
+        if (rv <= 0) {
+            return -1;
+        }
+        assert((size_t)rv <= len);
+        len -= (size_t)rv;
+        buf += rv;
+    }
+    return 0;
+}
+
+
+static int32_t write_all(int fd, const char *buf, size_t len) {
+    while (len > 0) {
+        ssize_t rv = write(fd, buf, len);
+        if (rv <= 0) {
+            return -1;
+        }
+        assert((size_t)rv <= len);
+        len -= (size_t)rv;
+        buf += rv;
+    }
+}
+
+
+static int32_t one_request(int connfd) {
+    char rbuf[4 + MAX_MSG_LEN + 1];
+    errno = 0;
+
+    int32_t err = read_full(connfd, rbuf, 4);
+    if (err) {
+        if (errno == 0) {
+            msg("EOF");
+        } else {
+            msg("read() error");
+        }
+        return err;
+    }
+
+    // read length
+    uint32_t len = 0;
+    memcpy(&len, rbuf, 4);
+    if (len > MAX_MSG_LEN) {
+        msg("message too long");
+        return -1;
+    }
+
+    // read message at length
+    err = read_full(connfd, &rbuf[4], len);
+    if (err) {
+        msg("read() error");
+        return err;
+    }
+
+    rbuf[4 + len] = '\0';
+    printf("[client says]: %s\n", &rbuf[4]);
+
+    //=================================================================================
+    // reply
+    const char reply[] = "hello client";
+    char wbuf[4 + sizeof(reply)];
+    len = (uint32_t)strlen(reply);
+    memcpy(wbuf, &len, 4);
+    memcpy(&wbuf[4], reply, len);
+
+    return write_all(connfd, wbuf, 4 + len);
 }
 
 
@@ -74,7 +154,13 @@ int main() {
             continue;   // error at connection
         }
 
-        do_something(connfd);
+        // do_something(connfd);
+        while (true) {
+            int32_t err = one_request(connfd);
+            if (err) {
+                break;
+            }
+        }
 
         close(connfd);
     }
