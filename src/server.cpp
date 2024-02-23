@@ -59,11 +59,12 @@ static int32_t write_all(int fd, const char *buf, size_t len) {
         len -= (size_t)rv;
         buf += rv;
     }
+    return 0;
 }
 
 
 static int32_t one_request(int connfd) {
-    char rbuf[4 + MAX_MSG_LEN + 1];
+    char rbuf[4 + MAX_MSG_LEN + 1] = {};
     errno = 0;
 
     int32_t err = read_full(connfd, rbuf, 4);
@@ -122,7 +123,7 @@ static void do_something(int connfd) {
 int main() {
     int fd = socket(AF_INET, SOCK_STREAM, 0);
     if (fd < 0) {
-        die("socket()");        
+        die("socket()");
     }
 
     int val = 1;

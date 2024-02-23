@@ -53,6 +53,7 @@ static int32_t write_all(int fd, const char *buf, size_t len) {
         len -= (size_t)rv;
         buf += rv;
     }
+    return 0;
 }
 
 
@@ -106,11 +107,11 @@ int main() {
         die("socket()");
     }
 
-    struct sockaddr_in addr;
+    struct sockaddr_in addr = {};
     addr.sin_family = AF_INET;
     addr.sin_port = ntohs(1234);
     addr.sin_addr.s_addr = ntohl(INADDR_LOOPBACK);
-    int rv = connect(fd, (struct sockaddr *)&addr, sizeof(addr));
+    int rv = connect(fd, (const struct sockaddr *)&addr, sizeof(addr));
     if (rv != 0) {
         die("connect()");
     }
